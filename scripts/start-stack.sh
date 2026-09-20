@@ -95,13 +95,21 @@ fi
 
 # ── Start in dependency order (supervise no-ops if already running) ──────────
 # Stage the cloudflared token + launcher first (idempotent; picks up token changes).
-say "staging cloudflared token (0600, kept off argv)"
-stage_cloudflared || die "failed to stage the cloudflared token in the userland"
+# POCKET_CF_DISABLED: this deployment uses an ssh -R forward to our own VPS
+# instead of a Cloudflare Tunnel. CF_TUNNEL_TOKEN is the literal "disabled"
+# only to satisfy upstream's require_var, so skip cloudflared entirely.
+if [ "${CF_TUNNEL_TOKEN}" != "disabled" ]; then
+  say "staging cloudflared token (0600, kept off argv)"
+  stage_cloudflared || die "failed to stage the cloudflared token in the userland"
+else
+  say "cloudflared skipped (CF_TUNNEL_TOKEN=disabled — using the ssh -R tunnel)"
+fi
 
 say "== starting core stack =="
 supervise matrix      -- "${matrix_cmd[@]}"
 supervise caddy       -- "${caddy_cmd[@]}"
-supervise cloudflared -- "${cloudflared_cmd[@]}"
+[ "${CF_TUNNEL_TOKEN}" != "disabled" ] && supervise cloudflared -- "${cloudflared_cmd[@]}"
+true  # keep set -e happy when the guard above is false
 
 # ── Scheduled backup daemon (opt-in; flag-gated, NOT .cmd-driven) ─────────────
 # Controlled by ENABLE_BACKUP_DAEMON, not by a lingering .cmd, so it is supervised

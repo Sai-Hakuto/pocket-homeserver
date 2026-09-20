@@ -934,7 +934,7 @@ def _build_health_procs():
     procs = [
         {"name": "matrix",      "pattern": "/opt/conduwuit/conduwuit"},
         {"name": "caddy",       "pattern": "caddy run"},
-        {"name": "cloudflared", "pattern": "cloudflared.*tunnel"},
+        # POCKET_NO_CLOUDFLARE: no Cloudflare Tunnel in this deployment.
         {"name": "adminweb",    "pattern": "gunicorn.*app:app"},
     ]
     if ENABLE["auth-gw"]:
@@ -1285,15 +1285,18 @@ def gather_stats():
         s["services"].append({"name": name, "port": port, "up": up,
                                "degraded": _degraded_marker(name)})
 
-    # cloudflared — check its log for a recent tunnel connection
+    # POCKET_NO_CLOUDFLARE: ingress is an `ssh -R` forward to our own VPS, not a Cloudflare
+    # Tunnel, so report the tunnel's health from ITS supervisor state instead.
     try:
-        log = read_file(os.path.join(LOGS, "cloudflared.log"))
         s["services"].append({
-            "name": "cloudflared",
+            "name": "vps-tunnel",
             "port": None,
-            "up": ("Registered tunnel connection" in log) or ("Connection " in log and "registered" in log.lower()),
-            "note": "tunnel",
-            "degraded": _degraded_marker("cloudflared"),
+            # Deliberately specific: a loose pattern like "cloudflared" also
+            # matches any shell command line mentioning it, which is exactly how
+            # the old check reported a stopped service as running.
+            "up": _proc_alive("-N -R 127.0.0.1:8443"),
+            "note": "ssh -R to VPS",
+            "degraded": _degraded_marker("tunnel"),
         })
     except Exception:
         pass

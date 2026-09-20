@@ -47,7 +47,8 @@ if [ -f "$envf" ]; then
   set +a
   _apply_env_defaults
   # Required vars — report presence only, NEVER the value.
-  for v in DOMAIN DATA_DIR CF_TUNNEL_TOKEN ADMIN_PASSWORD; do
+  # POCKET_NO_CLOUDFLARE: CF_TUNNEL_TOKEN is a placeholder here (ssh -R tunnel instead).
+  for v in DOMAIN DATA_DIR ADMIN_PASSWORD; do
     val="${!v:-}"
     case "$val" in
       "")                                  _f "$v is MISSING — set it in .env" ;;
@@ -128,7 +129,8 @@ if [ -f "$envf" ]; then
     _p "no duplicate *_PORT values in .env"
   fi
 fi
-for proc in cloudflared caddy conduwuit; do
+# POCKET_NO_CLOUDFLARE: cloudflared is not part of this deployment.
+for proc in caddy conduwuit; do
   if pgrep -f "$proc" >/dev/null 2>&1; then
     _p "$proc process running"
   else

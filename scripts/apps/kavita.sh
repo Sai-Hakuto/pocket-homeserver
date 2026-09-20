@@ -141,11 +141,13 @@ ok "Kavita extracted to ${INSTALL_DIR} (binary ${BIN})"
 # ── 3. Runtime dependency: system ICU (libicu72) ─────────────────────────────
 # Kavita ships a self-contained .NET build that still needs the system ICU
 # libraries to start (globalization); without libicu72 the process exits at boot.
-say "ensuring libicu72 is installed in the userland (the self-contained .NET build needs system ICU)"
-in_debian "command -v dpkg-query >/dev/null 2>&1 && dpkg-query -W -f='\${Status}' libicu72 2>/dev/null | grep -q 'install ok installed'" \
-  || in_debian "export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y --no-install-recommends libicu72" \
-  || die "failed to install libicu72 in the userland — Kavita will not start without system ICU"
-ok "libicu72 present in the userland"
+# POCKET_ICU_FIX: do NOT hardcode the ICU package name. Debian renames it every
+# release (bookworm: libicu72, trixie: libicu76), and proot-distro installs
+# whatever is current, so the hardcoded name breaks on a fresh userland.
+say "ensuring system ICU is installed in the userland (the self-contained .NET build needs it)"
+in_debian 'dpkg -l 2>/dev/null | grep -qE "^ii +libicu[0-9]+" && exit 0; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq; p=$(apt-cache search --names-only "^libicu[0-9]+$" | cut -d" " -f1 | sort -V | tail -1); [ -n "$p" ] || { echo "no libicuN package in this Debian release"; exit 1; }; echo "installing $p"; apt-get install -y --no-install-recommends "$p"' \
+  || die "failed to install system ICU in the userland — Kavita will not start without it"
+ok "system ICU present in the userland"
 
 # ── 4. Config dir bind target + read-only library mountpoint in the userland ─
 in_debian "mkdir -p '${CONFIG_MOUNT}' '${LIBRARY_MOUNT}'" \
@@ -211,6 +213,26 @@ in_debian "grep -Eq '\"IpAddresses\"[[:space:]]*:[[:space:]]*\"127\.0\.0\.1\"' '
 in_debian "grep -Eq '\"IpAddresses\"[[:space:]]*:[[:space:]]*\"(0\.0\.0\.0|::|)\"' '${APPSETTINGS}'" \
   && die "Kavita appsettings.json binds 0.0.0.0/::/empty — refusing to start (check ${APPSETTINGS})" || true
 ok "Kavita bind confirmed loopback (127.0.0.1)"
+
+# ── POCKET_KAVITA_BIND_FIX ───────────────────────────────────────────────────
+# The seed above lives INSIDE the userland at ${CONFIG_MOUNT}. At run time
+# start-stack.sh bind-mounts ${DATA_BACKING} OVER that directory, which hides the
+# file — Kavita then reports "Could not find file '.../appsettings.json'" and
+# falls back to 0.0.0.0/::,port 5000. Mirror it to the host dir that actually
+# becomes the config dir, so the hardened settings survive the bind.
+if [ ! -f "${DATA_BACKING}/appsettings.json" ]; then
+  say "mirroring appsettings.json to the bind source (${DATA_BACKING})"
+  mkdir -p "${DATA_BACKING}"
+  in_debian "cat '${APPSETTINGS}'" > "${DATA_BACKING}/appsettings.json" \
+    || die "failed to mirror appsettings.json to ${DATA_BACKING}"
+  chmod 600 "${DATA_BACKING}/appsettings.json"
+  ok "appsettings.json mirrored to ${DATA_BACKING} (chmod 600)"
+else
+  ok "appsettings.json already present in ${DATA_BACKING} — keeping it"
+fi
+grep -Eq '"IpAddresses"[[:space:]]*:[[:space:]]*"127\.0\.0\.1"' "${DATA_BACKING}/appsettings.json" \
+  || die "the appsettings.json Kavita will actually read (${DATA_BACKING}) is NOT loopback-bound"
+ok "bind-source appsettings.json confirmed loopback"
 
 # In-userland launcher: cd into the install dir (Kavita reads config/appsettings.json
 # RELATIVE to its working directory), then exec the binary. We deliberately do NOT
