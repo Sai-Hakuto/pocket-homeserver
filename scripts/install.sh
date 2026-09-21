@@ -70,7 +70,7 @@ core_steps=(
 # Optional apps, in install order, each gated by ENABLE_<APP>.
 # DUFS and FILEBROWSER both serve files.${DOMAIN} and are MUTUALLY EXCLUSIVE —
 # each script dies fail-closed if the other is also enabled.
-app_order=(LINKDING PINGVIN FRESHRSS MEMOS VIKUNJA SEARXNG ITTOOLS GATUS SITES DUFS FILEBROWSER WALLABAG RADICALE TRILIUM VAULTWARDEN NAVIDROME KAVITA AUDIOBOOKSHELF FORGEJO ADGUARD VPS_TUNNEL HARNESS PROXY_ROUTES)
+app_order=(LINKDING PINGVIN FRESHRSS MEMOS VIKUNJA SEARXNG ITTOOLS GATUS SITES DUFS FILEBROWSER WALLABAG RADICALE TRILIUM VAULTWARDEN NAVIDROME KAVITA AUDIOBOOKSHELF FORGEJO ADGUARD VPS_TUNNEL HARNESS HARNESS_WEB PROXY_ROUTES)
 declare -A app_step=(
   [LINKDING]="apps/linkding.sh"
   [PINGVIN]="apps/pingvin.sh"
@@ -94,6 +94,7 @@ declare -A app_step=(
   [ADGUARD]="apps/adguard.sh"
   [VPS_TUNNEL]="apps/vps-tunnel.sh"
   [HARNESS]="apps/harness.sh"
+  [HARNESS_WEB]="apps/harness-web.sh"
   [PROXY_ROUTES]="apps/proxy-routes.sh"
 )
 
