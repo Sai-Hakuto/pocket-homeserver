@@ -32,7 +32,14 @@ set -euo pipefail
 
 load_env
 require_var DATA_DIR        "folder on your large volume / SD card"
-require_var CF_TUNNEL_TOKEN  "the Cloudflare Tunnel token"
+# POCKET_INGRESS_REQUIRE: demand the token only in cloudflare mode. install.sh
+# already gates on INGRESS_MODE, but start-stack.sh has its OWN require_var and
+# runs standalone (Termux:Boot and the watchdog both call it directly) — so it
+# must gate too, or a vps-tunnel deployment dies on every boot with
+# "required config 'CF_TUNNEL_TOKEN' is empty".
+if [ "${INGRESS_MODE:-cloudflare}" = "cloudflare" ]; then
+  require_var CF_TUNNEL_TOKEN "the Cloudflare Tunnel token (INGRESS_MODE=cloudflare)"
+fi
 require_cmd proot-distro
 
 RESTART=0
