@@ -70,7 +70,7 @@ core_steps=(
 # Optional apps, in install order, each gated by ENABLE_<APP>.
 # DUFS and FILEBROWSER both serve files.${DOMAIN} and are MUTUALLY EXCLUSIVE —
 # each script dies fail-closed if the other is also enabled.
-app_order=(LINKDING PINGVIN FRESHRSS MEMOS VIKUNJA SEARXNG ITTOOLS GATUS SITES DUFS FILEBROWSER WALLABAG RADICALE TRILIUM VAULTWARDEN NAVIDROME KAVITA AUDIOBOOKSHELF FORGEJO ADGUARD HARNESS PROXY_ROUTES)
+app_order=(LINKDING PINGVIN FRESHRSS MEMOS VIKUNJA SEARXNG ITTOOLS GATUS SITES DUFS FILEBROWSER WALLABAG RADICALE TRILIUM VAULTWARDEN NAVIDROME KAVITA AUDIOBOOKSHELF FORGEJO ADGUARD VPS_TUNNEL HARNESS PROXY_ROUTES)
 declare -A app_step=(
   [LINKDING]="apps/linkding.sh"
   [PINGVIN]="apps/pingvin.sh"
@@ -92,6 +92,7 @@ declare -A app_step=(
   [AUDIOBOOKSHELF]="apps/audiobookshelf.sh"
   [FORGEJO]="apps/forgejo.sh"
   [ADGUARD]="apps/adguard.sh"
+  [VPS_TUNNEL]="apps/vps-tunnel.sh"
   [HARNESS]="apps/harness.sh"
   [PROXY_ROUTES]="apps/proxy-routes.sh"
 )
@@ -156,10 +157,33 @@ if [ "$STATUS" -eq 1 ]; then
 fi
 
 # Required before anything runs.
-require_var DOMAIN          "your apex domain (DNS on Cloudflare)"
+# POCKET_INGRESS_MODE
+# Ingress is pluggable. `cloudflare` is upstream's design and stays the default;
+# `vps-tunnel` runs an outbound `ssh -R` to a box you own, which terminates TLS.
+# Requirements differ per mode, so demand only what the chosen mode actually uses
+# — rather than forcing a placeholder token for a connector that will not run.
+INGRESS_MODE="${INGRESS_MODE:-cloudflare}"
+require_var DOMAIN          "your apex domain"
 require_var DATA_DIR        "folder on your large volume / SD card"
-require_var CF_TUNNEL_TOKEN "the Cloudflare Tunnel token"
 require_var ADMIN_PASSWORD  "the admin panel password"
+case "${INGRESS_MODE}" in
+  cloudflare)
+    require_var CF_TUNNEL_TOKEN "the Cloudflare Tunnel token (INGRESS_MODE=cloudflare)" ;;
+  vps-tunnel)
+    require_var VPS_HOST "the VPS that terminates TLS (INGRESS_MODE=vps-tunnel)" ;;
+  *)
+    die "INGRESS_MODE='${INGRESS_MODE}' is not valid — use 'cloudflare' or 'vps-tunnel'" ;;
+esac
+# POCKET_DERIVED_FLAG: the app loop gates on ENABLE_<APP>, so derive that flag
+# from INGRESS_MODE instead of asking the user to keep two settings in sync —
+# two sources of truth for one decision is how they drift apart.
+if [ "${INGRESS_MODE}" = "vps-tunnel" ]; then
+  ENABLE_VPS_TUNNEL=true
+else
+  ENABLE_VPS_TUNNEL=false
+fi
+export ENABLE_VPS_TUNNEL
+ok "ingress mode: ${INGRESS_MODE}"
 
 run_step() {   # run_step label relpath
   local label="$1" rel="$2" path="$HERE/$2" key

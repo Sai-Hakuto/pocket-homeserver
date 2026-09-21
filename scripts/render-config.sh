@@ -63,4 +63,19 @@ awk -v repl="$filter_routes" '
 ' "$out/Caddyfile" > "$out/Caddyfile.tmp" && mv -f "$out/Caddyfile.tmp" "$out/Caddyfile"
 if [ -n "$filter_routes" ]; then ok "wove privacy/media filter routes into the chat vhost"; fi
 
+# POCKET_DEPLOY_ON_RENDER: deploying used to live only in the `caddy` install
+# step, which is skipped once marked done — so a .env change re-rendered a file
+# that nothing read and the running service kept the old config. Deploy here,
+# where it runs every time. Validate first; never install a config Caddy rejects.
+if command -v proot-distro >/dev/null 2>&1 && [ -f "$out/Caddyfile" ]; then
+  if proot-distro login debian -- bash -lc "test -x /usr/bin/caddy || command -v caddy >/dev/null 2>&1" 2>/dev/null; then
+    if proot-distro login debian -- bash -lc "cat > /tmp/Caddyfile.new && caddy validate --config /tmp/Caddyfile.new --adapter caddyfile" \
+         < "$out/Caddyfile" >/dev/null 2>&1; then
+      proot-distro login debian -- bash -lc "install -m 644 /tmp/Caddyfile.new /etc/caddy/Caddyfile" 2>/dev/null \
+        && ok "deployed Caddyfile into the userland (restart caddy to apply)"
+    else
+      warn "rendered Caddyfile failed validation — NOT deployed"
+    fi
+  fi
+fi
 say "config rendered into $out"

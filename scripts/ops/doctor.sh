@@ -129,7 +129,17 @@ if [ -f "$envf" ]; then
     _p "no duplicate *_PORT values in .env"
   fi
 fi
-# POCKET_NO_CLOUDFLARE: cloudflared is not part of this deployment.
+# POCKET_INGRESS_DOCTOR: check the connector the chosen mode actually uses.
+# NOTE: `pgrep -f <name>` matches ANY command line containing that string —
+# including an ssh session that merely mentions it — so patterns must be tight.
+case "${INGRESS_MODE:-cloudflare}" in
+  cloudflare)
+    if pgrep -f "cloudflared tunnel" >/dev/null 2>&1; then _p "cloudflared running"
+    else _w "cloudflared not running (INGRESS_MODE=cloudflare)"; fi ;;
+  vps-tunnel)
+    if pgrep -f -- "-N -R 127.0.0.1:${CADDY_PORT:-8443}" >/dev/null 2>&1; then _p "vps-tunnel running"
+    else _f "vps-tunnel is DOWN — nothing reaches this box from outside"; fi ;;
+esac
 for proc in caddy conduwuit; do
   if pgrep -f "$proc" >/dev/null 2>&1; then
     _p "$proc process running"

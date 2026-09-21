@@ -200,6 +200,17 @@ DUFS_PASS_HASH="${DUFS_PASS_HASH:-}"
 # ${DUFS_USER}, and ${DUFS_PASS_HASH}. The auth value is wrapped in SINGLE quotes
 # inside the YAML so dufs (not the shell — the shell already expanded our vars)
 # treats the literal '$6$...' hash correctly.
+# POCKET_DUFS_WRITABLE: upstream is read-only by design — ':ro' plus
+# allow-upload/allow-delete false — so even the admin credential gets 403 on
+# MKCOL/PUT and a mounted network drive looks broken to its owner. Make it a
+# flag so the choice survives a reinstall, instead of a hand edit that
+# `install.sh --force` silently reverts.
+if [ "${DUFS_WRITABLE:-false}" = "true" ]; then
+  DUFS_PERM="rw"; DUFS_WRITABLE_YN="true"
+  warn "DUFS_WRITABLE=true — ${DUFS_USER} can upload AND DELETE over WebDAV"
+else
+  DUFS_PERM="ro"; DUFS_WRITABLE_YN="false"
+fi
 say "writing hardened ${CONFIG}"
 # POCKET_DUFS_HEREDOC_FIX: escaped $<digit> inside the heredoc below.
 proot-distro login debian -- bash -lc "umask 077; cat > ${CONFIG}" <<EOF
@@ -224,11 +235,11 @@ port: ${DUFS_PORT}
 # │ Digest auth is broken with hashed passwords, clients authenticate with Basic.
 # └────────────────────────────────────────────────────────────────────────────
 auth:
-  - '${DUFS_USER}:${DUFS_PASS_HASH}@/:ro'
+  - '${DUFS_USER}:${DUFS_PASS_HASH}@/:${DUFS_PERM}'
 
 # READ-ONLY BY DEFAULT — uploads + deletes are OFF.
-allow-upload: false
-allow-delete: false
+allow-upload: ${DUFS_WRITABLE_YN}
+allow-delete: ${DUFS_WRITABLE_YN}
 # Browsing conveniences (read-only; safe to leave on).
 allow-search: true
 allow-archive: true

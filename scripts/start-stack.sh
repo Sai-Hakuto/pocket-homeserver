@@ -95,21 +95,22 @@ fi
 
 # ── Start in dependency order (supervise no-ops if already running) ──────────
 # Stage the cloudflared token + launcher first (idempotent; picks up token changes).
-# POCKET_CF_DISABLED: this deployment uses an ssh -R forward to our own VPS
-# instead of a Cloudflare Tunnel. CF_TUNNEL_TOKEN is the literal "disabled"
-# only to satisfy upstream's require_var, so skip cloudflared entirely.
-if [ "${CF_TUNNEL_TOKEN}" != "disabled" ]; then
+# POCKET_INGRESS_MODE: exactly one connector runs, chosen by INGRESS_MODE.
+INGRESS_MODE="${INGRESS_MODE:-cloudflare}"
+if [ "${INGRESS_MODE}" = "cloudflare" ]; then
   say "staging cloudflared token (0600, kept off argv)"
   stage_cloudflared || die "failed to stage the cloudflared token in the userland"
-else
-  say "cloudflared skipped (CF_TUNNEL_TOKEN=disabled — using the ssh -R tunnel)"
 fi
 
 say "== starting core stack =="
 supervise matrix      -- "${matrix_cmd[@]}"
 supervise caddy       -- "${caddy_cmd[@]}"
-[ "${CF_TUNNEL_TOKEN}" != "disabled" ] && supervise cloudflared -- "${cloudflared_cmd[@]}"
-true  # keep set -e happy when the guard above is false
+# The connector for the selected mode. vps-tunnel is registered by
+# apps/vps-tunnel.sh, which records its own .cmd — the loop further down
+# re-supervises it, so nothing extra is needed here.
+if [ "${INGRESS_MODE}" = "cloudflare" ]; then
+  supervise cloudflared -- "${cloudflared_cmd[@]}"
+fi
 
 # ── Scheduled backup daemon (opt-in; flag-gated, NOT .cmd-driven) ─────────────
 # Controlled by ENABLE_BACKUP_DAEMON, not by a lingering .cmd, so it is supervised

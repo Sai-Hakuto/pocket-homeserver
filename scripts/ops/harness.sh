@@ -15,7 +15,20 @@ load_env
 SECRETS_FILE="${DATA_DIR}/secrets/harness.env"
 WORKSPACE="${HARNESS_WORKSPACE:-${HOME}/.pocket/harness/workspace}"
 PROVIDER="${HARNESS_PROVIDER:-openrouter}"
-MODEL="${HARNESS_MODEL:-deepseek/deepseek-v4.1-flash}"
+# POCKET_MODEL_DEFAULTS: model IDs are provider-specific — OpenRouter namespaces
+# them ("deepseek/deepseek-v4.1-flash"), the direct DeepSeek API does not
+# ("deepseek-flash") and 404s on the slashed form. Leave HARNESS_MODEL blank and
+# the right default is chosen, so changing provider cannot silently misconfigure.
+MODEL="${HARNESS_MODEL:-}"
+if [ -z "${MODEL}" ]; then
+  case "${PROVIDER}" in
+    deepseek)   MODEL="deepseek-flash" ;;
+    openrouter) MODEL="deepseek/deepseek-v4.1-flash" ;;
+    anthropic)  MODEL="claude-sonnet-5" ;;
+    openai)     MODEL="gpt-5.4" ;;
+    google)     MODEL="gemini-3-flash" ;;
+  esac
+fi
 
 STATUS=0
 if [ "${1:-}" = "--status" ]; then STATUS=1; shift; fi
